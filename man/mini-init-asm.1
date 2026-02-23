@@ -1,141 +1,69 @@
-.TH MINI-INIT-ASM 1 2026-01-11 "mini-init-asm 0.3.1" "User Commands"
+.TH MINI-INIT-ASM 1 2026-02-23 "mini-init-asm 0.3.1" "User Commands"
 .SH NAME
-mini-init-asm \- tiny PID 1 init for containers (pure assembly)
+mini-init-asm \- tiny PID 1 init for containers
 .SH SYNOPSIS
 .B mini-init-asm
-[\fB\-v\fR|\fB\-\-verbose\fR]
-[\fB\-V\fR|\fB\-\-version\fR]
-\fB\-\-\fR \fIcommand\fR [\fIargs...\fR]
+[\fB-v\fR|\fB--verbose\fR]
+[\fB-V\fR|\fB--version\fR]
+\fB--\fR \fIcommand\fR [\fIargs\fR ...]
 .SH DESCRIPTION
 .B mini-init-asm
-is a tiny init intended for container entrypoints.
-It spawns exactly one main child process in a new session and process group, forwards signals to the entire group, and reaps children.
-It optionally supports subreaper mode and a simple restart-on-crash loop.
+is a small container init that runs one child process as PID 1, forwards
+incoming signals to the child's process group, and reaps exited descendants.
+It is implemented in assembly and intentionally avoids libc runtime
+dependencies.
 .PP
-Upstream builds currently produce architecture-named binaries
-(\fBmini-init-amd64\fR and \fBmini-init-arm64\fR).
-Debian packaging typically installs the active architecture binary as
-.BR mini-init-asm (1).
+On Debian, the installed executable is
+.BR /usr/bin/mini-init-asm .
 .SH OPTIONS
 .TP
-.BR \-v ", " \-\-verbose
-Enable verbose diagnostics on stderr.
+.BR -v ", " --verbose
+Enable verbose diagnostics on standard error.
 .TP
-.BR \-V ", " \-\-version
-Print version and exit.
+.BR -V ", " --version
+Print version information and exit.
 .SH ENVIRONMENT
-All numeric environment variables are parsed as non-negative decimal integers.
-Invalid values are ignored (defaults apply).
-.TP
-.B EP_GRACE_SECONDS
-Grace period (seconds) after the first shutdown signal (TERM/INT/HUP/QUIT) before escalating to SIGKILL.
-Default: 10.
+Numeric values are parsed as non-negative decimal integers. Invalid values are
+ignored and defaults are used.
 .TP
 .B EP_SIGNALS
-Comma-separated list of additional signals to monitor and forward.
-Tokens are trimmed for surrounding spaces.
-.IP
-Supported named tokens:
-USR1, USR2, PIPE, WINCH, TTIN, TTOU, CONT, ALRM
-.IP
-Supported numeric tokens:
-decimal signal numbers 1..64 (SIGKILL and SIGSTOP are ignored).
-.IP
-Supported real-time tokens:
-RT1..RT30 (maps to \fISIGRTMIN\fR+N), only if \fBEP_SIGRTMIN\fR and \fBEP_SIGRTMAX\fR are set and valid.
-.IP
-Unknown tokens are ignored with a warning in verbose mode.
-.TP
-.B EP_SIGRTMIN
-Decimal runtime value of SIGRTMIN for the target libc environment.
-Required to enable RT* tokens in EP_SIGNALS.
-.TP
-.B EP_SIGRTMAX
-Decimal runtime value of SIGRTMAX for the target libc environment.
-Required to enable RT* tokens in EP_SIGNALS.
-.IP
-Rationale: per \fBsignal\fR(7), SIGRTMIN/SIGRTMAX can vary at runtime in some libcs (e.g. glibc with threads), so hard-coded RT numbering is unsafe.
+Comma-separated list of additional signals to monitor and forward to the child
+process group. Tokens may be signal names (for example
+.BR USR1 ,
+.BR WINCH )
+or signal numbers.
 .TP
 .B EP_SUBREAPER
-If set to 1, enable \fBPR_SET_CHILD_SUBREAPER\fR so that \fBmini-init-asm\fR adopts orphaned descendants.
-The init still exits when the main child exits.
-Default: 0.
-.TP
-.B EP_EXIT_CODE_BASE
-Base exit code for signal deaths:
-\fIexit_code = base + signal_number\fR.
-Default: 128 (shell-compatible).
-Valid range: 0..255.
+If set to
+.BR 1 ,
+enable
+.BR PR_SET_CHILD_SUBREAPER
+so the process can adopt orphaned descendants before reaping them.
+Default:
+.BR 0 .
 .TP
 .B EP_RESTART_ENABLED
-If set to 1, restart the child only if it died due to a signal and shutdown has not started.
-Default: 0.
+If set to
+.BR 1 ,
+restart the child when it dies from a signal and shutdown has not started.
+Default:
+.BR 0 .
 .TP
 .B EP_MAX_RESTARTS
-Maximum number of restarts when restart is enabled.
-0 means unlimited.
-Default: 0.
-.TP
-.B EP_RESTART_BACKOFF_SECONDS
-Seconds to wait before restarting after a crash.
-0 restarts immediately.
-Default: 1.
-.TP
-.B EP_ARM64_FALLBACK
-ARM64/QEMU workaround: if set to 1, skip the epoll/signalfd loop and use a simpler wait4-only path.
-This mode primarily validates spawn and exit-code propagation.
-Default: 0.
-.SH SIGNAL FORWARDING
-The child is started as a new session leader and process group leader.
-When a signal is received, \fBmini-init-asm\fR forwards it to the entire child process group via
-\fBkill\fR(2) with a negative pid (\fIkill(-pgid, sig)\fR).
-.PP
-On the first shutdown signal (TERM/INT/HUP/QUIT), a grace timer is armed; when it expires and the child group is still present, SIGKILL is sent to the group.
+Maximum number of restarts when
+.B EP_RESTART_ENABLED=1
+is active.
+.BR 0
+means unlimited restarts.
+Default:
+.BR 0 .
 .SH EXIT STATUS
-.IP \[bu] 2
-If the child exits normally, \fBmini-init-asm\fR exits with the child exit status.
-.IP \[bu] 2
-If the child dies due to a signal, \fBmini-init-asm\fR exits with \fBEP_EXIT_CODE_BASE\fR + signal number.
-.IP \[bu] 2
-If \fBmini-init-asm\fR escalates to SIGKILL after the grace period, it exits as if the child died to SIGKILL.
-.SH EXAMPLES
-.TP
-Run a command under the init:
-.IP
-.nf
-mini-init-asm \-\- /bin/sh \-c 'echo hello; sleep 5'
-.fi
-.TP
-Forward an additional numeric signal (SIGTRAP=5):
-.IP
-.nf
-EP_SIGNALS=5 mini-init-asm \-\- /bin/sh \-c 'trap "echo got TRAP; exit 0" TRAP; sleep 1000'
-.fi
-.TP
-Enable RT tokens (values must match the target libc runtime):
-.IP
-.nf
-EP_SIGRTMIN=34 EP_SIGRTMAX=64 EP_SIGNALS=RT1,RT5 mini-init-asm \-\- /bin/sh \-c 'sleep 1000'
-.fi
-.TP
-Restart-on-crash with backoff:
-.IP
-.nf
-EP_RESTART_ENABLED=1 EP_MAX_RESTARTS=5 EP_RESTART_BACKOFF_SECONDS=2 \\
-  mini-init-asm \-\- ./your-app
-.fi
-.SH NOTES
-.IP \[bu] 2
-To discover SIGRTMIN/SIGRTMAX inside an image, one option is:
-.IP
-.nf
-python3 \-c 'import signal; print(signal.SIGRTMIN, signal.SIGRTMAX)'
-.fi
+.IP \(bu 2
+Returns the child's exit status when the child exits normally.
+.IP \(bu 2
+Returns a signal-based status when the child is terminated by a signal.
 .SH SEE ALSO
 .BR signal (7),
 .BR signalfd (2),
-.BR epoll (7),
-.BR timerfd_create (2),
 .BR prctl (2),
-.BR kill (2),
 .BR wait4 (2)
