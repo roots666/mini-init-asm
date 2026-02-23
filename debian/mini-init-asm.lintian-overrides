@@ -1,3 +1,2 @@
 # mini-init-asm is intentionally libc-free and uses Linux syscalls directly.
-# The resulting ELF has no dynamic dependencies and is effectively static.
-statically-linked-binary [usr/bin/mini-init-asm]
+mini-init-asm binary: statically-linked-binary [usr/bin/mini-init-asm]
