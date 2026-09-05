@@ -624,13 +624,18 @@ _start:
 	.grace_timer_added:
 	    mov qword [g_shutdown], 1
 	    jmp .main_loop
-	.grace_timer_unavailable:
-	    LOG log_warn_grace_timer_unavailable, log_warn_grace_timer_unavailable_len
-	    mov qword [g_shutdown], 1
-	    mov rdi, [g_child_pid]
-	    mov rsi, SIGKILL
-	    call forward_signal_to_group
-	    mov qword [g_killed], 1
+.grace_timer_unavailable:
+    LOG log_warn_grace_timer_unavailable, log_warn_grace_timer_unavailable_len
+    mov qword [g_shutdown], 1
+    ; Reconcile child state before immediate escalation.
+    mov rdi, [g_child_pid]
+    call reap_children_nonblock
+    test rax, rax
+    jnz .timer_reaped_exit
+    mov rdi, [g_child_pid]
+    mov rsi, SIGKILL
+    call forward_signal_to_group
+    mov qword [g_killed], 1
 	    jmp .main_loop
 
 .check_timer:
@@ -683,10 +688,15 @@ _start:
     ; drain timerfd
     mov rdi, [g_tfd]
     call read_timerfd_tick
+    ; Final reconciliation: the main child may already be waitable while
+    ; SIGCHLD is still queued on signalfd. Reap it before deciding to escalate.
+    mov rdi, [g_child_pid]
+    call reap_children_nonblock
+    test rax, rax
+    jnz .timer_reaped_exit
     ; if child not exited yet -> kill -KILL
     cmp qword [g_child_exited], 1
     je .main_loop
-
     ; avoid killing a reused PGID: if kill(-pgid, 0) reports ESRCH, skip escalation
     mov rax, [g_child_pid]
     neg rax
@@ -708,6 +718,16 @@ _start:
     call forward_signal_to_group
     mov qword [g_killed], 1
     jmp .main_loop
+
+.timer_reaped_exit:
+    call get_wait_status_ptr
+    mov rdi, [rax]
+    call extract_exit_code
+    mov [g_child_status], rax
+    mov qword [g_child_exited], 1
+    LOG log_sigchld_ok, log_sigchld_ok_len
+    mov rax, [g_child_status]
+    EXIT rax
 
 .handle_chld:
     ; reap all
