@@ -90,6 +90,7 @@ jobs:
           timeout 2m bash scripts/test_exit_code_mapping.sh build/mini-init-arm64
           timeout 2m bash scripts/test_restart.sh build/mini-init-arm64
           timeout 2m bash scripts/test_diagnostics.sh build/mini-init-arm64
+          timeout 2m bash scripts/test_sigchld_timer_race.sh build/mini-init-arm64
 
   debian-package:
     name: Debian package build (lintian)
