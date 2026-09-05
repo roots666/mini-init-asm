@@ -68,7 +68,7 @@ log_warn_bad_backoff: .asciz "WARN: invalid EP_RESTART_BACKOFF_SECONDS; using de
 .equ log_warn_bad_backoff_len, . - log_warn_bad_backoff - 1
 	log_warn_clamp_backoff: .asciz "WARN: EP_RESTART_BACKOFF_SECONDS too large; clamping"
 	.equ log_warn_clamp_backoff_len, . - log_warn_clamp_backoff - 1
-	log_warn_grace_timer_unavailable: .asciz "WARN: grace timer unavailable; escalating immediately to SIGKILL"
+	log_warn_grace_timer_unavailable: .asciz "WARN: grace timer unavailable; checking child before escalation"
 	.equ log_warn_grace_timer_unavailable_len, . - log_warn_grace_timer_unavailable - 1
 	log_warn_backoff_timer_epoll_failed: .asciz "WARN: backoff timer could not be added to epoll; restarting immediately"
 	.equ log_warn_backoff_timer_epoll_failed_len, . - log_warn_backoff_timer_epoll_failed - 1
@@ -785,17 +785,7 @@ _start:
     ldr x0, [x0]
     bl reap_children_nonblock
     cbnz x0, .timer_reaped_exit
-    // escalate immediately to SIGKILL
-    adrp x0, g_child_pid
-    add x0, x0, :lo12:g_child_pid
-	    ldr x0, [x0]
-	    mov x1, #SIGKILL
-	    bl forward_signal_to_group
-	    mov x1, #1
-	    adrp x0, g_killed
-	    add x0, x0, :lo12:g_killed
-	    str x1, [x0]
-	    b .main_loop
+    b .grace_escalate
 
 .check_timer:
     // Check if this is the backoff timer
@@ -886,7 +876,7 @@ _start:
     ldr x0, [x0]
     cmp x0, #1
     beq .main_loop
-
+.grace_escalate:
     // avoid killing a reused PGID: if kill(-pgid, 0) reports ESRCH, skip escalation
     adrp x0, g_child_pid
     add x0, x0, :lo12:g_child_pid

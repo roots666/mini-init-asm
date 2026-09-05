@@ -35,7 +35,7 @@ $(INC_DIR)/version_amd64.inc: VERSION
 
 $(INC_DIR)/version_arm64.inc: VERSION
 	@echo '// Auto-generated version file' > $@
-	@echo 'version_msg_arm64: .asciz "mini-init-arm64 $(VERSION)\n"' >> $@
+	@printf 'version_msg_arm64: .asciz "mini-init-arm64 %s\\n"\n' '$(VERSION)' >> $@
 	@echo '.equ version_msg_arm64_len, . - version_msg_arm64 - 1' >> $@
 
 AMD64_BUILD_DIR  := $(BUILD_DIR)/amd64

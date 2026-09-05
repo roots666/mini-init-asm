@@ -75,7 +75,7 @@ log_warn_bad_backoff: db "WARN: invalid EP_RESTART_BACKOFF_SECONDS; using defaul
 log_warn_bad_backoff_len: equ $ - log_warn_bad_backoff
 log_warn_clamp_backoff: db "WARN: EP_RESTART_BACKOFF_SECONDS too large; clamping", 10
 log_warn_clamp_backoff_len: equ $ - log_warn_clamp_backoff
-log_warn_grace_timer_unavailable: db "WARN: grace timer unavailable; escalating immediately to SIGKILL", 10
+log_warn_grace_timer_unavailable: db "WARN: grace timer unavailable; checking child before escalation", 10
 log_warn_grace_timer_unavailable_len: equ $ - log_warn_grace_timer_unavailable
 log_warn_backoff_timer_epoll_failed: db "WARN: backoff timer could not be added to epoll; restarting immediately", 10
 log_warn_backoff_timer_epoll_failed_len: equ $ - log_warn_backoff_timer_epoll_failed
@@ -632,11 +632,7 @@ _start:
     call reap_children_nonblock
     test rax, rax
     jnz .timer_reaped_exit
-    mov rdi, [g_child_pid]
-    mov rsi, SIGKILL
-    call forward_signal_to_group
-    mov qword [g_killed], 1
-	    jmp .main_loop
+    jmp .grace_escalate
 
 .check_timer:
     ; Check if this is the backoff timer
@@ -697,6 +693,7 @@ _start:
     ; if child not exited yet -> kill -KILL
     cmp qword [g_child_exited], 1
     je .main_loop
+.grace_escalate:
     ; avoid killing a reused PGID: if kill(-pgid, 0) reports ESRCH, skip escalation
     mov rax, [g_child_pid]
     neg rax
