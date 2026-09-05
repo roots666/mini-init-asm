@@ -381,6 +381,8 @@ High-level algorithm:
        - if the main child exited, propagate its exit code and terminate.
    - On timer expiration:
 
+     - first re-check (reap) the main child so an already-exited child keeps its
+       real exit status;
      - if the child is still alive, escalate to `SIGKILL` for the whole group.
 
 Key syscalls: `signalfd(2)`, `epoll(7)`, `timerfd_create(2)`, `timerfd_settime(2)`,

@@ -1,6 +1,16 @@
 <!-- markdownlint-disable MD024 -->
 # Changelog
 
+## 0.3.2 - 2026-09-05
+
+### Fixed
+
+- Fix graceful-shutdown race: before the grace timer escalates to `SIGKILL`, reconcile the main child state with a non-blocking reap. A child that already exited while `SIGCHLD` was still pending on the signalfd now keeps its real exit status instead of being reported as a forced `SIGKILL`/137. Applies equally to the timer-unavailable immediate-escalation path and to both amd64 and arm64.
+
+### Tests
+
+- Add a deterministic stop/release regression (`scripts/test_sigchld_timer_race.sh`) that arms the grace timer, registers its timerfd in epoll, stops init, lets the timer fire and the child exit, then resumes init; verified RED before the fix and GREEN after on native ARM64, with the amd64 runner quirk detected and skipped.
+
 ## 0.3.1 - 2026-01-11
 
 ### Fixed

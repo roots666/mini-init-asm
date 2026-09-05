@@ -68,7 +68,7 @@ log_warn_bad_backoff: .asciz "WARN: invalid EP_RESTART_BACKOFF_SECONDS; using de
 .equ log_warn_bad_backoff_len, . - log_warn_bad_backoff - 1
 	log_warn_clamp_backoff: .asciz "WARN: EP_RESTART_BACKOFF_SECONDS too large; clamping"
 	.equ log_warn_clamp_backoff_len, . - log_warn_clamp_backoff - 1
-	log_warn_grace_timer_unavailable: .asciz "WARN: grace timer unavailable; escalating immediately to SIGKILL"
+	log_warn_grace_timer_unavailable: .asciz "WARN: grace timer unavailable; checking child before escalation"
 	.equ log_warn_grace_timer_unavailable_len, . - log_warn_grace_timer_unavailable - 1
 	log_warn_backoff_timer_epoll_failed: .asciz "WARN: backoff timer could not be added to epoll; restarting immediately"
 	.equ log_warn_backoff_timer_epoll_failed_len, . - log_warn_backoff_timer_epoll_failed - 1
@@ -774,22 +774,18 @@ _start:
 	    b .main_loop
 
 .grace_timer_unavailable:
-	    LOG log_warn_grace_timer_unavailable, log_warn_grace_timer_unavailable_len
-	    mov x1, #1
-	    adrp x0, g_shutdown
-	    add x0, x0, :lo12:g_shutdown
-	    str x1, [x0]
-	    // escalate immediately to SIGKILL
-	    adrp x0, g_child_pid
-	    add x0, x0, :lo12:g_child_pid
-	    ldr x0, [x0]
-	    mov x1, #SIGKILL
-	    bl forward_signal_to_group
-	    mov x1, #1
-	    adrp x0, g_killed
-	    add x0, x0, :lo12:g_killed
-	    str x1, [x0]
-	    b .main_loop
+    LOG log_warn_grace_timer_unavailable, log_warn_grace_timer_unavailable_len
+    mov x1, #1
+    adrp x0, g_shutdown
+    add x0, x0, :lo12:g_shutdown
+    str x1, [x0]
+    // Reconcile child state before immediate escalation.
+    adrp x0, g_child_pid
+    add x0, x0, :lo12:g_child_pid
+    ldr x0, [x0]
+    bl reap_children_nonblock
+    cbnz x0, .timer_reaped_exit
+    b .grace_escalate
 
 .check_timer:
     // Check if this is the backoff timer
@@ -867,12 +863,20 @@ _start:
     mov x0, x19
     bl read_timerfd_tick
 
+    // Final reconciliation: the main child may already be waitable while
+    // SIGCHLD is still queued on signalfd. Reap before deciding to escalate.
+    adrp x0, g_child_pid
+    add x0, x0, :lo12:g_child_pid
+    ldr x0, [x0]
+    bl reap_children_nonblock
+    cbnz x0, .timer_reaped_exit
+
     adrp x0, g_child_exited
     add x0, x0, :lo12:g_child_exited
     ldr x0, [x0]
     cmp x0, #1
     beq .main_loop
-
+.grace_escalate:
     // avoid killing a reused PGID: if kill(-pgid, 0) reports ESRCH, skip escalation
     adrp x0, g_child_pid
     add x0, x0, :lo12:g_child_pid
@@ -899,6 +903,23 @@ _start:
     add x0, x0, :lo12:g_killed
     str x1, [x0]
     b .main_loop
+
+.timer_reaped_exit:
+    bl get_wait_status_ptr
+    ldr x0, [x0]
+    bl extract_exit_code
+    adrp x1, g_child_status
+    add x1, x1, :lo12:g_child_status
+    str x0, [x1]
+    adrp x1, g_child_exited
+    add x1, x1, :lo12:g_child_exited
+    mov x2, #1
+    str x2, [x1]
+    LOG log_sigchld_ok, log_sigchld_ok_len
+    adrp x0, g_child_status
+    add x0, x0, :lo12:g_child_status
+    ldr x0, [x0]
+    SYSCALL SYS_exit
 
 .handle_chld:
     adrp x0, g_child_pid

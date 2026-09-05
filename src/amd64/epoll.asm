@@ -36,11 +36,11 @@ epoll_create_fd:
 ; epoll_add_fd(epfd, fd)
 ; rdi=epfd, rsi=fd
 epoll_add_fd:
-    ; prepare struct epoll_event { uint32_t events; uint64_t data; } (we use 16 bytes)
+    ; x86-64 kernel epoll_event is EPOLL_PACKED: events @0, data @4, size 12.
+    ; Keep a 16-byte scratch slot but place data at offset 4.
     sub rsp, EPOLL_EVENT_SIZE
     mov dword [rsp], EPOLLIN       ; events
-    mov dword [rsp+4], 0           ; padding
-    mov qword [rsp+8], rsi         ; data = fd
+    mov qword [rsp+4], rsi         ; data = fd (EPOLL_PACKED: data at offset 4)
     mov rdx, rsi                   ; arg3: fd
     mov rsi, EPOLL_CTL_ADD         ; arg2: op
     mov r10, rsp                   ; arg4: event pointer
@@ -93,7 +93,7 @@ epoll_wait_once:
     jl .err
     ; read data of first event
     lea rbx, [rel epoll_events_buf]
-    mov rax, [rbx+8]       ; data (u64) at offset 8
+    mov rax, [rbx+4]       ; data (u64) at offset 4 (EPOLL_PACKED)
     ret
 .err:
     mov rax, -1

@@ -35,7 +35,7 @@ $(INC_DIR)/version_amd64.inc: VERSION
 
 $(INC_DIR)/version_arm64.inc: VERSION
 	@echo '// Auto-generated version file' > $@
-	@echo 'version_msg_arm64: .asciz "mini-init-arm64 $(VERSION)\n"' >> $@
+	@printf 'version_msg_arm64: .asciz "mini-init-arm64 %s\\n"\n' '$(VERSION)' >> $@
 	@echo '.equ version_msg_arm64_len, . - version_msg_arm64 - 1' >> $@
 
 AMD64_BUILD_DIR  := $(BUILD_DIR)/amd64
@@ -76,6 +76,7 @@ test-all: test-amd64
 	bash scripts/test_exit_code_mapping.sh $(BUILD_DIR)/$(TARGET_AMD64)
 	bash scripts/test_restart.sh $(BUILD_DIR)/$(TARGET_AMD64)
 	bash scripts/test_diagnostics.sh $(BUILD_DIR)/$(TARGET_AMD64)
+	bash scripts/test_sigchld_timer_race.sh $(BUILD_DIR)/$(TARGET_AMD64)
 
 $(AMD64_BUILD_DIR):
 	mkdir -p $@
