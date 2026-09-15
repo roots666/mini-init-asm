@@ -49,14 +49,6 @@
 build/
 
 # Debian packaging build artifacts
-ci/debian-build/
-debian/.debhelper/
-debian/tmp/
-debian/mini-init-asm/
-debian/mini-init-asm-dbgsym/
-debian/*substvars
-debian/files
-debian/debhelper-build-stamp
 modules.order
 Module.symvers
 Mkfile.old

@@ -1,2 +1,0 @@
-# mini-init-asm is intentionally libc-free and uses Linux syscalls directly.
-mini-init-asm binary: statically-linked-binary [usr/bin/mini-init-asm]

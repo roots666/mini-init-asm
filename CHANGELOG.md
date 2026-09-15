@@ -1,6 +1,19 @@
 <!-- markdownlint-disable MD024 -->
 # Changelog
 
+## 0.3.3 - 2026-09-15
+
+### Packaging
+
+- Remove the bundled `debian/` tree from the upstream repository; Debian packaging now lives only in Salsa, so Debian can import upstream sources without a `+ds` repack.
+- Remove the in-repo Debian lintian CI job from `.github/workflows/release.yml`.
+
+### Version
+
+- Bump `VERSION` to 0.3.3 and regenerate the version include files.
+- Update the Debian Packaging README section to point at Salsa; bump the man
+  page header to 0.3.3.
+
 ## 0.3.2 - 2026-09-05
 
 ### Fixed

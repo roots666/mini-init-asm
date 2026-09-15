@@ -520,47 +520,13 @@ bash scripts/test_diagnostics.sh build/mini-init-arm64
 
 ## Debian Packaging
 
-### Package Information
+The Debian package lives in the Debian Salsa repository:
+<https://salsa.debian.org/debian/mini-init-asm>. Upstream source trees no longer
+ship a bundled `debian/` directory; build dependencies, packaging, autopkgtest
+coverage, and lintian checks are maintained there.
 
-The Debian package `mini-init-asm` provides a unified binary:
-- **Installed at:** `/usr/bin/mini-init-asm`
-- **Architecture-specific:** Built for `amd64` and `arm64` only
-- **Statically linked:** No runtime dependencies (libc-free)
-
-### Building the Debian Package
-
-```bash
-# Install build dependencies
-sudo apt-get install debhelper-compat binutils nasm make
-
-# Build binary package
-dpkg-buildpackage -us -uc -b
-
-# Install locally
-sudo dpkg -i ../mini-init-asm_*.deb
-```
-
-### Running Autopkgtest
-
-```bash
-# After installing package
-autopkgtest . -- null
-
-# Or from source tree with schroot
-autopkgtest -B . -- schroot unstable-amd64
-```
-
-### Lintian Check
-
-```bash
-lintian --fail-on warning --display-info ../mini-init-asm_*.deb
-```
-
-### Supported Architectures
-
-Currently supported: **amd64**, **arm64**
-
-Other architectures are not supported due to the assembly implementation.
+Packaged binaries install as `/usr/bin/mini-init-asm` and are supported on
+**amd64** and **arm64** only.
 
 ---
 
